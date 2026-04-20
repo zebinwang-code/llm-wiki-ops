@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  LaunchAgent template for scheduled Loop 2 weekly reports (macOS only).
+
+  Installation:
+  1. Customize the `StartCalendarInterval` fields below for your desired fire time.
+     Example below fires once on 2026-04-27 at 10:00 AM local time.
+     For a recurring weekly schedule, use `Weekday` instead of Year/Month/Day:
+        <key>Weekday</key><integer>1</integer>  <!-- 1=Monday, 7=Sunday -->
+        <key>Hour</key><integer>10</integer>
+
+  2. Update the ProgramArguments path to point to your installed wiki-loop2-report.sh
+
+  3. Copy to ~/Library/LaunchAgents/ and load:
+        cp com.llm-wiki.loop2-weekly-report.plist.example \
+           ~/Library/LaunchAgents/com.llm-wiki.loop2-weekly-report.plist
+        plutil -lint ~/Library/LaunchAgents/com.llm-wiki.loop2-weekly-report.plist
+        launchctl load -w ~/Library/LaunchAgents/com.llm-wiki.loop2-weekly-report.plist
+
+  4. Verify scheduled:
+        launchctl print "gui/$(id -u)/com.llm-wiki.loop2-weekly-report"
+
+  On Linux, use cron or systemd timers instead:
+        # crontab entry: fire every Monday at 10:00
+        0 10 * * 1 /path/to/wiki-loop2-report.sh
+-->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.llm-wiki.loop2-weekly-report</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/path/to/wiki-loop2-report.sh</string>
+    </array>
+
+    <!-- Adjust for your desired fire time -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Year</key>
+        <integer>2026</integer>
+        <key>Month</key>
+        <integer>4</integer>
+        <key>Day</key>
+        <integer>27</integer>
+        <key>Hour</key>
+        <integer>10</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>StandardOutPath</key>
+    <string>/tmp/loop2-report.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/loop2-report.err.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>HOME</key>
+        <string>/Users/YOUR_USERNAME</string>
+        <key>WIKI_ROOT</key>
+        <string>/path/to/your/wiki</string>
+    </dict>
+</dict>
+</plist>

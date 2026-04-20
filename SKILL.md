@@ -9,7 +9,7 @@ description: |
   architecture, four-loop automation, structured audit system, unlinked concept 
   detection, daily operation logs, wiki health monitoring.
 author: zebinwang-code
-version: 2.0.0
+version: 2.1.0
 date: 2026-04-20
 ---
 
@@ -60,12 +60,43 @@ Schema (human-machine)      → wiki/_schema.md
 
 ```
 Loop 1 Auto-Ingest: new sources → check for compilable knowledge → /wiki ingest
-Loop 2 Auto-Query:  read wiki index before answering → answer from compiled knowledge
+Loop 2 Auto-Query:  UserPromptSubmit hook auto-injects wiki context for domain questions
 Loop 3 Structured Review: audit/ feedback + weekly lint + monthly health + quarterly domain audit
 Loop 4 Daily Close: /wrap-up integrates wiki maintenance (tag check, index, lint, audit scan)
 ```
 
-### 5. Structured Audit (Loop 3 Core Mechanism)
+### 5. Loop 2 Hard Enforcement (UserPromptSubmit Hook)
+
+**v2.1 addition**: Loop 2 was the weakest loop because it relied on LLM self-discipline
+to "read wiki before answering". v2.1 converts this from a soft CLAUDE.md rule into a
+hard harness mechanism via a `UserPromptSubmit` hook.
+
+**Mechanism**: `hooks/wiki-context-injector.sh` runs before every user prompt reaches
+the LLM. If the prompt matches registered domain keywords, the hook loads the relevant
+domain pages + index excerpt and injects them as `additionalContext`. The LLM cannot
+bypass the wiki because the wiki is already in its context.
+
+**Architecture**:
+```
+User Prompt → [UserPromptSubmit hook with regex matcher]
+           → wiki-context-injector.sh (loads domain pages)
+           → <wiki-context> block injected
+           → LLM responds with [[wikilinks]]
+           → Injection logged to log/YYYYMMDD.md as `query` op
+```
+
+**Token budget**: ~2000 tokens worst case (index 300 + 2 domain pages at 800 each).
+Zero cost when prompt doesn't match any domain keyword (regex matcher pre-filters).
+
+**Opt-out**: Prompts containing "skip wiki" / "跳过wiki" / "不查知识库", or starting with `/`,
+are silently skipped.
+
+**Observability**: `scripts/wiki-loop2-report.sh` generates weekly reports on hit rate,
+domain distribution, and token cost.
+
+See `hooks/README.md` for installation and customization.
+
+### 6. Structured Audit (Loop 3 Core Mechanism)
 
 When humans find wiki errors, they file audit files to `wiki/audit/` instead of editing wiki directly.
 
@@ -79,7 +110,7 @@ When humans find wiki errors, they file audit files to `wiki/audit/` instead of 
 
 See `wiki/_schema.md` "Structured Audit" section for full specification.
 
-### 6. Unlinked Concept Detection (Knowledge Gap Finder)
+### 7. Unlinked Concept Detection (Knowledge Gap Finder)
 
 During `/wiki lint`, automatically scan all wiki pages to identify **terms appearing 3+ times without a corresponding wiki page**.
 
@@ -94,7 +125,7 @@ During `/wiki lint`, automatically scan all wiki pages to identify **terms appea
 - Exclude frontmatter, code blocks, blockquotes
 - Results written to daily `log/YYYYMMDD.md`
 
-### 7. Daily Operation Logs
+### 8. Daily Operation Logs
 
 All wiki operations log to `wiki/log/YYYYMMDD.md` (one file per day), not appended to index.md.
 
@@ -102,7 +133,7 @@ All wiki operations log to `wiki/log/YYYYMMDD.md` (one file per day), not append
 - Operation types: `ingest` · `lint` · `audit` · `query` · `split` · `scaffold` · `archive`
 - `index.md` "Recent Activity" keeps only last 3 summaries + pointer to `log/`
 
-### 8. Wiki Health Monitoring
+### 9. Wiki Health Monitoring
 
 - Health dashboard (e.g., Obsidian Dataview) auto-detects untagged and orphan pages
 - `_schema.md` maintains domain tag registry

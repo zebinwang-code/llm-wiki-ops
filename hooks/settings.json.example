@@ -1,0 +1,19 @@
+{
+  "_comment": "Example Claude Code settings.json snippet. Merge the `hooks.UserPromptSubmit` array into your existing ~/.claude/settings.json. Keep all other existing hooks/keys intact.",
+
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "_comment": "Loop 2 enforcement: matcher pre-filters to domain keywords so the hook only fires on relevant prompts (zero overhead otherwise). Customize the regex to match your registered domain keywords.",
+        "matcher": "your|domain|keywords|here|separated|by|pipes",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/path/to/hooks/wiki-context-injector.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

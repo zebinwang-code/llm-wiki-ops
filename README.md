@@ -56,7 +56,36 @@ Layer 3: Schema (human-machine)     → wiki/_schema.md
 
 ## Key Innovations
 
-### 1. Source Document Triage
+### 1. Loop 2 Hard Enforcement (UserPromptSubmit Hook) — v2.1
+
+Loop 2 is the most critical loop in the system: if users bypass the wiki when asking questions, the whole "compile once, query many" value proposition breaks. v2.1 converts Loop 2 from a soft `CLAUDE.md` rule into a **harness-enforced mechanism**.
+
+```
+User Prompt
+    ↓
+[UserPromptSubmit hook — regex matcher pre-filters to domain keywords]
+    ↓
+wiki-context-injector.sh
+    ├─ matches prompt against registered domain keywords
+    ├─ loads matched domain pages + index excerpt
+    └─ writes <wiki-context> block to stdout
+    ↓
+LLM (wiki already in context — cannot bypass)
+    ↓
+Response cites wiki with [[wikilinks]]
+    ↓
+Injection logged to log/YYYYMMDD.md as `query` operation
+```
+
+**Why this matters**: Without the hook, LLMs read `CLAUDE.md` at session start but often skip wiki reading under context pressure. The hook makes wiki-first the default, not a preference.
+
+**Token budget**: ~2000 tokens worst case (index excerpt 300 + 2 domain pages at 800 each). Zero cost when prompt doesn't match any domain keyword.
+
+**Opt-out**: Prompts with "skip wiki" / "跳过wiki" / "不查知识库" or starting with `/` are silently bypassed.
+
+See [`hooks/README.md`](hooks/README.md) for installation and customization.
+
+### 2. Source Document Triage
 
 Before ingesting any source, classify it into one of four levels. Each level has different write permissions to the wiki:
 
@@ -69,7 +98,7 @@ Before ingesting any source, classify it into one of four levels. Each level has
 
 This prevents meeting notes from overwriting final decisions, while preserving the full decision history.
 
-### 2. Structured Audit System
+### 3. Structured Audit System
 
 Humans file feedback as structured Markdown files in `wiki/audit/` instead of editing wiki pages directly. Each audit uses **text anchors** (not line numbers) so feedback survives file edits:
 
@@ -84,7 +113,7 @@ Four severity levels: `error` (factual) > `warn` (stale) > `suggest` (improvemen
 
 The LLM processes audits during lint: locate via anchor → fix wiki → record resolution → archive to `audit/resolved/`.
 
-### 3. Unlinked Concept Detection
+### 4. Unlinked Concept Detection
 
 The wiki **discovers its own knowledge gaps**. During lint, it scans all pages for terms that appear 3+ times across different pages but have no dedicated wiki page. This is the wiki's growth engine — it tells you what to write next.
 
@@ -95,7 +124,7 @@ The wiki **discovers its own knowledge gaps**. During lint, it scans all pages f
 → Suggest: create dedicated concept pages, or confirm as general terms
 ```
 
-### 4. Version Conflict Resolution
+### 5. Version Conflict Resolution
 
 A decision matrix for when new sources contradict existing wiki content:
 
@@ -106,7 +135,7 @@ A decision matrix for when new sources contradict existing wiki content:
 | input | authoritative | **Don't overwrite**, append with source attribution |
 | discussion | any | **Don't modify**, evolution trail only |
 
-### 5. Page Size Discipline
+### 6. Page Size Discipline
 
 | Page Type | Target | Split Threshold |
 |-----------|--------|----------------|
@@ -117,7 +146,7 @@ A decision matrix for when new sources contradict existing wiki content:
 
 Oversized pages are auto-detected during lint and suggested for splitting.
 
-### 6. Daily Operation Logs
+### 7. Daily Operation Logs
 
 All wiki operations log to `wiki/log/YYYYMMDD.md` (one file per day), keeping `index.md` clean:
 
@@ -133,6 +162,8 @@ All wiki operations log to `wiki/log/YYYYMMDD.md` (one file per day), keeping `i
 
 ## Directory Structure
 
+### Your Wiki
+
 ```
 your-wiki/
 ├── wiki/
@@ -145,12 +176,33 @@ your-wiki/
 │   ├── comparisons/          # Side-by-side analysis
 │   ├── audit/                # Open human feedback
 │   │   └── resolved/         # Processed feedback (with decisions)
-│   └── log/                  # Daily operation logs (YYYYMMDD.md)
+│   ├── log/                  # Daily operation logs (YYYYMMDD.md)
+│   └── reports/              # Weekly Loop 2 effectiveness reports
 ├── raw/                      # Immutable source documents
 │   ├── articles/
 │   ├── notes/
 │   └── references/
 └── CLAUDE.md                 # LLM behavior rules
+```
+
+### This Repo
+
+```
+llm-wiki-ops/
+├── README.md                 # This file
+├── SKILL.md                  # Claude Code skill definition
+├── CLAUDE.md                 # Behavior rules template
+├── schema.md                 # Copy to wiki/_schema.md
+├── hooks/                    # v2.1: Loop 2 hard enforcement
+│   ├── wiki-context-injector.sh
+│   ├── settings.json.example
+│   └── README.md             # Hook installation guide
+├── scripts/                  # Automation
+│   ├── scaffold.sh           # Bootstrap a new wiki
+│   ├── wiki-loop2-report.sh  # v2.1: Weekly effectiveness reports
+│   └── launchagents/         # macOS scheduler templates
+├── templates/                # Page templates (entity/concept/domain/etc.)
+└── examples/                 # Real-world example files
 ```
 
 ## 9-Point Lint Checklist
@@ -192,6 +244,29 @@ cd llm-wiki-ops
 
 Copy `SKILL.md` to `~/.claude/skills/llm-wiki-ops/SKILL.md`. The skill activates when you work with wiki knowledge bases.
 
+### Option D: Install Loop 2 Hard Enforcement (recommended, v2.1)
+
+After setting up your wiki, install the UserPromptSubmit hook to enforce Loop 2:
+
+```bash
+# 1. Copy hook script + customize for your domains
+cp hooks/wiki-context-injector.sh ~/.local/wiki-hooks/
+vim ~/.local/wiki-hooks/wiki-context-injector.sh  # Edit domain matchers
+
+# 2. Register hook in Claude Code settings
+# See hooks/settings.json.example and merge into ~/.claude/settings.json
+
+# 3. Reload Claude Code (open /hooks menu or restart)
+
+# 4. Optional: schedule weekly effectiveness reports (macOS)
+cp scripts/launchagents/com.llm-wiki.loop2-weekly-report.plist.example \
+   ~/Library/LaunchAgents/com.llm-wiki.loop2-weekly-report.plist
+# Edit paths inside the plist, then:
+launchctl load -w ~/Library/LaunchAgents/com.llm-wiki.loop2-weekly-report.plist
+```
+
+See [`hooks/README.md`](hooks/README.md) for full installation walkthrough.
+
 ## Page Templates
 
 See [templates/](templates/) for ready-to-use templates:
@@ -222,9 +297,10 @@ See [examples/](examples/) for real-world examples:
 
 ## Comparison with Other Approaches
 
-| Feature | RAG | Karpathy LLM Wiki | lewislulu/llm-wiki-skill | **This System** |
+| Feature | RAG | Karpathy LLM Wiki | lewislulu/llm-wiki-skill | **This System (v2.1)** |
 |---------|-----|-------------------|--------------------------|-----------------|
 | Knowledge persistence | No (re-derive) | Yes (compiled) | Yes (compiled) | Yes (compiled) |
+| **Query enforcement** | Auto (retrieval) | Soft rule in prompt | Soft rule in prompt | **Hard — UserPromptSubmit hook** |
 | Source triage | No | No | No | **4-level permissions** |
 | Lifecycle automation | No | Manual | Manual (5 ops) | **4 closed loops** |
 | Human feedback | N/A | N/A | Text-anchor audit | **Text-anchor audit** |
@@ -232,7 +308,7 @@ See [examples/](examples/) for real-world examples:
 | Version conflicts | N/A | N/A | N/A | **Decision matrix** |
 | Page size discipline | No | Suggested | Yes (400-1200) | **Yes + auto-detect** |
 | Domain organization | No | Flat | Flat (3 types) | **Multi-domain + color tags** |
-| Operation logs | No | No | Daily logs | **Daily logs** |
+| Operation logs | No | No | Daily logs | **Daily logs + weekly reports** |
 | Health monitoring | No | No | Python lint (7 checks) | **9-point lint + Dataview** |
 
 ## Acknowledgments
